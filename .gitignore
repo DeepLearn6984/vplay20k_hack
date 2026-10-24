@@ -1,0 +1,7 @@
+# Copyrighted data: never publish, regenerate locally from your own dump
+*.bin
+*.nes
+*.nes.bak
+*.png
+*.bmp
+*.zip

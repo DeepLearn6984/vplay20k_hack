@@ -1,0 +1,124 @@
+\documentclass{article}
+\usepackage[T1]{fontenc}
+\usepackage[margin=2cm]{geometry}
+\usepackage{bytefield}
+\usepackage{booktabs}
+\begin{document}
+\pagestyle{empty}
+
+\newcommand\bithead[2]{\bitbox[]{#1}{\scriptsize\bfseries #2}}
+
+% Command to draw a memory section with start and end addresses
+\newcommand{\memsection}[4]{
+    \bytefieldsetup{bitheight=#3\baselineskip} % sets the section height
+    \bitbox[]{8}{
+        \texttt{0x\uppercase{#2}} \\
+        \vspace{#3\baselineskip} \vspace{-2\baselineskip} \vspace{-#3pt}
+        \texttt{0x\uppercase{#1}}
+    }
+    \bitbox{16}{#4}
+}
+
+\section*{VPlay20K -- W25Q32 flash map (4 MB)}
+
+Main chip: VT369 (OneBus, NES 2.0 mapper 256, console type 0x0A).
+Emulatable ROM: 16-byte NES 2.0 header + full dump (\texttt{vape\_full\_vt369.nes}).
+
+\begin{bytefield}{24}
+    % Empty (size = 0x040000)
+    \memsection{3C0000}{3FFFFF}{3}{Empty (0xFF)} \\
+
+    % Unknown data (size = 0x2D0000)
+    \memsection{0F0000}{3BFFFF}{10}{\shortstack{Unknown data\\(no 6502 code; audio?)}} \\
+
+    % Empty (size = 0x020000)
+    \memsection{0D0000}{0EFFFF}{3}{Empty (0xFF)} \\
+
+    % Harry Tetris PRG (size = 0x8000)
+    \memsection{0C8000}{0CFFFF}{3}{Harry Tetris PRG (32 KB)} \\
+
+    % Harry Tetris CHR (size = 0x2000)
+    \memsection{0C6000}{0C7FFF}{3}{Harry Tetris CHR (8 KB)} \\
+
+    % Pac-Man (size = 0x6000)
+    \memsection{0C0000}{0C5FFF}{3}{Pac-Man (24 KB)} \\
+
+    % F-22 (size = 0x40000)
+    \memsection{080000}{0BFFFF}{5}{F-22 (256 KB, MMC3)} \\
+
+    % Menu, fixed bank (size = 0x4000)
+    \memsection{07C000}{07FFFF}{4}{\shortstack{Menu: fixed bank \$C000--\$FFFF\\vectors at 0x7FFFA}} \\
+
+    % Menu, switchable banks (size = 0x16000)
+    \memsection{066000}{07BFFF}{4}{Menu: code banks} \\
+
+    % Test program (size = 0x6000)
+    \memsection{060000}{065FFF}{3}{Test program (24 KB)} \\
+
+    % Menu graphics (size = 0x60000)
+    \memsection{000000}{05FFFF}{6}{\shortstack{Menu graphics\\8bpp tiles (256 colours)}} \\
+\end{bytefield}
+
+\subsection*{Menu graphics (0x000000--0x05FFFF)}
+
+8$\times$8 tiles in 8bpp: 1 byte per pixel, 64 bytes per tile.
+One block per 32 KB slice, padded with 0xFF:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Start & Used size \\
+\midrule
+\texttt{0x000000} & \texttt{0xF840} \\
+\texttt{0x010000} & \texttt{0x6340} \\
+\texttt{0x018000} & \texttt{0x5100} \\
+\texttt{0x020000} & \texttt{0x5100} \\
+\texttt{0x028000} & \texttt{0x3840} \\
+\texttt{0x030000} & \texttt{0x3EC0} \\
+\texttt{0x038000} & \texttt{0x2640} \\
+\texttt{0x040000} & \texttt{0xA700} \\
+\texttt{0x050000} & \texttt{0x4780} \\
+\texttt{0x058000} & \texttt{0x5100} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection*{Menu code (fixed bank, CPU addresses)}
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Address & Role \\
+\midrule
+\texttt{\$EEFB} / \texttt{\$D520} / \texttt{\$D6AA} & RESET / NMI / IRQ \\
+\texttt{\$F113} & Game launcher (banks \$4107--\$410A, jump to RAM) \\
+\texttt{\$DD07} + table \texttt{\$DB08} & LCD init, 160$\times$128, 16-bit colour \\
+\texttt{\$E189}--\texttt{\$E35A} & Bit-banged I2C (\$4150/\$4152, read \$4153), device 0x40 \\
+\texttt{\$CC11} + table \texttt{\$E372} & I2C challenge-response (anti-clone?), ``Wellminds Technology'' \\
+\texttt{\$D3A9} / \texttt{\$D44C} & BEAST / REGULAR confirmation \\
+\texttt{\$EF74} & Reads MCU status at boot \\
+\texttt{\$D0CC} & Power-down (\$4175 = \$19) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection*{Link to the vape microcontroller (port \texttt{\$41EA}/\texttt{\$41EB})}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Direction & Bits & Meaning \\
+\midrule
+VT369 $\rightarrow$ MCU & bit 6 & Mode: 0 = BEAST (25 W), 1 = REGULAR \\
+VT369 $\rightarrow$ MCU & bit 7 & Unknown (\$0D27) \\
+MCU $\rightarrow$ VT369 & bits 5--4 = \texttt{01} & Battery, 0--5 (\$0D30) \\
+MCU $\rightarrow$ VT369 & bits 5--4 = \texttt{11} & E-liquid, 0--10 (\$0D2F) \\
+MCU $\rightarrow$ VT369 & bit 5 at boot & Device status; bit 3 = saved mode \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The 25 W, 3.5 V and 0.5 $\Omega$ values on the BEAST screen are fixed images:
+the actual heating power is set by the microcontroller, not by the VT369.
+
+\end{document}
